@@ -1,0 +1,40 @@
+from flask import Flask, request
+import os
+import pandas as pd
+import sqlalchemy as sa
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+import numpy as np
+
+from sqlalchemy import create_engine
+
+app = Flask(__name__)
+
+connection_string = "mysql+mysqlconnector://root:@localhost:3306/tarea1"
+engine = create_engine(connection_string, echo=True)
+
+with engine.begin() as conn:
+    df = pd.read_sql_query(sa.text("select * from aws_faq"), conn)
+
+
+df.dropna(inplace=True)
+vec = TfidfVectorizer()
+vec.fit(np.concatenate((df['Question'],df['Answer'])))
+# preguntas = df.to_json(orient = 'columns')
+
+df_vectors = vec.transform(df["Question"])
+
+@app.get("/database")
+def get_stores():
+    return {"stores": questions}
+
+
+@app.post("/database")
+def create_store():
+    request_data = request.get_json()
+    input_question = request_data["Question"]
+    input_question_vec = vec.transform([input_question])
+    similarity = cosine_similarity(input_question_vec, df_vectors)
+    closest_ans = np.argmax(similarity,axis=1)
+    respuesta = df['Answer'].iloc[closest_ans].values[0]
+    return {"message": respuesta}, 200
